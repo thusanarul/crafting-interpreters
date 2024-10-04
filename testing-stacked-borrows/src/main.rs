@@ -1,6 +1,7 @@
 mod arrays;
 mod interior_mut;
 mod shared_ref;
+mod testing_box;
 
 fn first() {
     unsafe {
@@ -54,5 +55,6 @@ fn main() {
     // arrays::second();
     // arrays::third();
     // shared_ref::first();
-    interior_mut::first();
+    // interior_mut::second();
+    testing_box::first();
 }
