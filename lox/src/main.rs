@@ -6,8 +6,14 @@ use std::{
     process,
 };
 
-use eyre::eyre;
 use scanner::{Scanner, Token};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+enum Error {
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -22,22 +28,21 @@ fn main() {
     }
 }
 
-fn run_file(path: &String) -> Result<(), eyre::Error> {
+fn run_file(path: &String) -> Result<(), Error> {
     let bytes: Vec<u8> = fs::read(path)?;
 
     run(&bytes);
     Ok(())
 }
 
-fn run_prompt() -> Result<(), eyre::Error> {
+fn run_prompt() -> Result<(), Error> {
     let _ = io::stdout().flush();
     let mut buf = String::new();
 
     loop {
         println!("> ");
-        io::stdin()
-            .read_line(&mut buf)
-            .map_err(|err| eyre!("Could not read input: {:}", err))?;
+        io::stdin().read_line(&mut buf)?;
+
         if buf == "" {
             break;
         }
