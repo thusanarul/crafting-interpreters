@@ -2,16 +2,21 @@ use std::fmt::Display;
 
 pub struct Scanner {
     source: Vec<u8>,
+    tokens: Vec<Token>,
 }
 
 impl Scanner {
     pub fn new(source: &[u8]) -> Self {
         Scanner {
             source: source.to_vec(),
+            tokens: Vec::new(),
         }
     }
 
-    pub fn scan_tokens(&self) -> Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
+        self.tokens
+            .push(Token::new(TokenType::Eof, String::new(), None, 0));
+
         todo!()
     }
 }
@@ -26,8 +31,19 @@ enum Literal {
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
-    literal: Literal,
+    literal: Option<Literal>,
     line: i32,
+}
+
+impl Token {
+    pub fn new(token_type: TokenType, lexeme: String, literal: Option<Literal>, line: i32) -> Self {
+        Self {
+            token_type,
+            lexeme,
+            literal,
+            line,
+        }
+    }
 }
 
 impl Display for Token {
