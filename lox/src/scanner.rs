@@ -1,23 +1,75 @@
+use core::str;
 use std::fmt::Display;
 
 pub struct Scanner {
-    source: Vec<u8>,
+    source: String,
     tokens: Vec<Token>,
+    start: usize,
+    current: usize,
+    line: i32,
 }
 
 impl Scanner {
     pub fn new(source: &[u8]) -> Self {
         Scanner {
-            source: source.to_vec(),
+            source: String::from_utf8(source.to_owned()).expect("Invalid UTF-8 string"),
             tokens: Vec::new(),
+            start: 0,
+            current: 0,
+            line: 1,
         }
     }
 
     pub fn scan_tokens(&mut self) -> Vec<Token> {
+        while !self.is_at_end() {
+            // We are at the beginning of the next lexeme.
+            self.start = self.current;
+            if let Some(token) = self.scan_token() {
+                self.tokens.push(token);
+            }
+        }
+
         self.tokens
             .push(Token::new(TokenType::Eof, String::new(), None, 0));
 
         todo!()
+    }
+
+    fn scan_token(&mut self) -> Option<Token> {
+        let c = self.advance();
+        match c {
+            '(' => self.get_token(TokenType::LeftParen, None),
+            ')' => self.get_token(TokenType::RightParen, None),
+            '{' => self.get_token(TokenType::LeftBrace, None),
+            '}' => self.get_token(TokenType::RightBrace, None),
+            ',' => self.get_token(TokenType::Comma, None),
+            '.' => self.get_token(TokenType::Dot, None),
+            '-' => self.get_token(TokenType::Minus, None),
+            '+' => self.get_token(TokenType::Plus, None),
+            ';' => self.get_token(TokenType::Semicolon, None),
+            '*' => self.get_token(TokenType::Star, None),
+            _ => None,
+        }
+    }
+
+    fn get_token(&self, token_type: TokenType, literal: Option<Literal>) -> Option<Token> {
+        let lexeme = self.source[self.start..self.current].to_owned();
+        return Some(Token::new(token_type, lexeme, literal, self.line));
+    }
+
+    fn advance(&mut self) -> char {
+        let curr_index = self.current;
+        let source = self
+            .source
+            .chars()
+            .nth(curr_index)
+            .expect("Could not get char from string");
+        self.current = self.current + 1;
+        return source;
+    }
+
+    fn is_at_end(&self) -> bool {
+        return self.current >= self.source.len();
     }
 }
 
