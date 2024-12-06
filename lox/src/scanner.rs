@@ -1,5 +1,29 @@
-use core::str;
 use std::fmt::Display;
+
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone, Copy)]
+pub(crate) enum Error {
+    #[error("invalid char: {0}")]
+    UnexceptedChar(char),
+}
+
+#[derive(Debug, Clone)]
+pub struct Errors(Vec<Error>);
+
+impl Errors {
+    fn new() -> Self {
+        Self { 0: Vec::new() }
+    }
+
+    fn push(&mut self, val: Error) {
+        self.0.push(val);
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
 
 pub struct Scanner {
     source: String,
@@ -7,6 +31,7 @@ pub struct Scanner {
     start: usize,
     current: usize,
     line: i32,
+    errors: Errors,
 }
 
 impl Scanner {
@@ -17,27 +42,37 @@ impl Scanner {
             start: 0,
             current: 0,
             line: 1,
+            errors: Errors::new(),
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Errors> {
         while !self.is_at_end() {
             // We are at the beginning of the next lexeme.
             self.start = self.current;
-            if let Some(token) = self.scan_token() {
-                self.tokens.push(token);
+
+            match self.scan_token() {
+                Ok(token) => {
+                    self.tokens.push(token);
+                }
+                Err(err) => {
+                    self.errors.push(err.clone());
+                }
             }
         }
 
         self.tokens
             .push(Token::new(TokenType::Eof, String::new(), None, 0));
 
-        todo!()
+        if !self.errors.is_empty() {
+            return Err(self.errors.clone());
+        }
+
+        Ok(self.tokens.clone())
     }
 
-    fn scan_token(&mut self) -> Option<Token> {
-        let c = self.advance();
-        match c {
+    fn scan_token(&mut self) -> Result<Token, Error> {
+        let token = match self.advance() {
             '(' => self.get_token(TokenType::LeftParen, None),
             ')' => self.get_token(TokenType::RightParen, None),
             '{' => self.get_token(TokenType::LeftBrace, None),
@@ -48,13 +83,43 @@ impl Scanner {
             '+' => self.get_token(TokenType::Plus, None),
             ';' => self.get_token(TokenType::Semicolon, None),
             '*' => self.get_token(TokenType::Star, None),
-            _ => None,
-        }
+            '!' => {
+                if self.match_char('=') {
+                    self.get_token(TokenType::BangEqual, None)
+                } else {
+                    self.get_token(TokenType::Bang, None)
+                }
+            }
+            '=' => {
+                if self.match_char('=') {
+                    self.get_token(TokenType::EqualEqual, None)
+                } else {
+                    self.get_token(TokenType::Equal, None)
+                }
+            }
+            '<' => {
+                if self.match_char('=') {
+                    self.get_token(TokenType::LessEqual, None)
+                } else {
+                    self.get_token(TokenType::Less, None)
+                }
+            }
+            '>' => {
+                if self.match_char('=') {
+                    self.get_token(TokenType::GreaterEqual, None)
+                } else {
+                    self.get_token(TokenType::Greater, None)
+                }
+            }
+            unexpected => return Err(Error::UnexceptedChar(unexpected)),
+        };
+
+        Ok(token)
     }
 
-    fn get_token(&self, token_type: TokenType, literal: Option<Literal>) -> Option<Token> {
+    fn get_token(&self, token_type: TokenType, literal: Option<Literal>) -> Token {
         let lexeme = self.source[self.start..self.current].to_owned();
-        return Some(Token::new(token_type, lexeme, literal, self.line));
+        return Token::new(token_type, lexeme, literal, self.line);
     }
 
     fn advance(&mut self) -> char {
@@ -71,15 +136,36 @@ impl Scanner {
     fn is_at_end(&self) -> bool {
         return self.current >= self.source.len();
     }
+
+    fn match_char(&mut self, expected: char) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+
+        let curr_index = self.current;
+        let source = self
+            .source
+            .chars()
+            .nth(curr_index)
+            .expect("Could not get char from string");
+
+        if source != expected {
+            return false;
+        }
+
+        self.current = self.current + 1;
+        return true;
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Literal {
     Number(f64),
     String(String),
     // Probably other stuff?
 }
 
+#[derive(Debug, Clone)]
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
@@ -108,7 +194,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum TokenType {
     // Single-character tokens.
     LeftParen,
