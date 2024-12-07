@@ -51,13 +51,8 @@ impl Scanner {
             // We are at the beginning of the next lexeme.
             self.start = self.current;
 
-            match self.scan_token() {
-                Ok(token) => {
-                    self.tokens.push(token);
-                }
-                Err(err) => {
-                    self.errors.push(err.clone());
-                }
+            if let Err(err) = self.scan_token() {
+                self.errors.push(err.clone());
             }
         }
 
@@ -71,55 +66,70 @@ impl Scanner {
         Ok(self.tokens.clone())
     }
 
-    fn scan_token(&mut self) -> Result<Token, Error> {
-        let token = match self.advance() {
-            '(' => self.get_token(TokenType::LeftParen, None),
-            ')' => self.get_token(TokenType::RightParen, None),
-            '{' => self.get_token(TokenType::LeftBrace, None),
-            '}' => self.get_token(TokenType::RightBrace, None),
-            ',' => self.get_token(TokenType::Comma, None),
-            '.' => self.get_token(TokenType::Dot, None),
-            '-' => self.get_token(TokenType::Minus, None),
-            '+' => self.get_token(TokenType::Plus, None),
-            ';' => self.get_token(TokenType::Semicolon, None),
-            '*' => self.get_token(TokenType::Star, None),
+    fn scan_token(&mut self) -> Result<(), Error> {
+        match self.advance() {
+            '(' => self.add_token(TokenType::LeftParen),
+            ')' => self.add_token(TokenType::RightParen),
+            '{' => self.add_token(TokenType::LeftBrace),
+            '}' => self.add_token(TokenType::RightBrace),
+            ',' => self.add_token(TokenType::Comma),
+            '.' => self.add_token(TokenType::Dot),
+            '-' => self.add_token(TokenType::Minus),
+            '+' => self.add_token(TokenType::Plus),
+            ';' => self.add_token(TokenType::Semicolon),
+            '*' => self.add_token(TokenType::Star),
             '!' => {
                 if self.match_char('=') {
-                    self.get_token(TokenType::BangEqual, None)
+                    self.add_token(TokenType::BangEqual)
                 } else {
-                    self.get_token(TokenType::Bang, None)
+                    self.add_token(TokenType::Bang)
                 }
             }
             '=' => {
                 if self.match_char('=') {
-                    self.get_token(TokenType::EqualEqual, None)
+                    self.add_token(TokenType::EqualEqual)
                 } else {
-                    self.get_token(TokenType::Equal, None)
+                    self.add_token(TokenType::Equal)
                 }
             }
             '<' => {
                 if self.match_char('=') {
-                    self.get_token(TokenType::LessEqual, None)
+                    self.add_token(TokenType::LessEqual)
                 } else {
-                    self.get_token(TokenType::Less, None)
+                    self.add_token(TokenType::Less)
                 }
             }
             '>' => {
                 if self.match_char('=') {
-                    self.get_token(TokenType::GreaterEqual, None)
+                    self.add_token(TokenType::GreaterEqual)
                 } else {
-                    self.get_token(TokenType::Greater, None)
+                    self.add_token(TokenType::Greater)
+                }
+            }
+            '/' => {
+                if self.match_char('/') {
+                    // A comment goes until the end of the line.
+                    while self.peek() != '\n' && !self.is_at_end() {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(TokenType::Slash)
                 }
             }
             unexpected => return Err(Error::UnexceptedChar(unexpected)),
         };
 
-        Ok(token)
+        Ok(())
     }
 
     fn get_token(&self, token_type: TokenType, literal: Option<Literal>) -> Token {
         let lexeme = self.source[self.start..self.current].to_owned();
         return Token::new(token_type, lexeme, literal, self.line);
+    }
+
+    fn add_token(&mut self, token_type: TokenType) {
+        let token = self.get_token(token_type, None);
+        self.tokens.push(token);
     }
 
     fn advance(&mut self) -> char {
@@ -155,6 +165,18 @@ impl Scanner {
 
         self.current = self.current + 1;
         return true;
+    }
+
+    fn peek(&self) -> char {
+        if self.is_at_end() {
+            return '\0';
+        }
+
+        return self
+            .source
+            .chars()
+            .nth(self.current)
+            .expect("COuld not get char from string");
     }
 }
 
