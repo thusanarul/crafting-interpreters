@@ -1,13 +1,16 @@
 use std::fmt::Display;
 
+use phf::phf_map;
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone, Copy)]
+#[derive(Error, Debug, Clone)]
 pub(crate) enum Error {
     #[error("invalid char: {0}")]
     UnexceptedChar(char),
     #[error("unterminated string at line: {0}")]
     UnterminatedString(i32),
+    #[error("unable to parse to float: {0}")]
+    ParseError(#[from] std::num::ParseFloatError),
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +29,25 @@ impl Errors {
         self.0.is_empty()
     }
 }
+
+static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
+    "and" => TokenType::And,
+    "class" => TokenType::Class,
+    "else" => TokenType::Else,
+    "false" => TokenType::False,
+    "for" => TokenType::For,
+    "fun" => TokenType::Fun,
+    "if" => TokenType::If,
+    "nil" => TokenType::Nil,
+    "or" => TokenType::Or,
+    "print" => TokenType::Print,
+    "return" => TokenType::Return,
+    "super" => TokenType::Super,
+    "this" => TokenType::This,
+    "true" => TokenType::True,
+    "var" => TokenType::Var,
+    "while" => TokenType::While
+};
 
 pub struct Scanner {
     source: String,
@@ -127,15 +149,43 @@ impl Scanner {
                 self.add_token(token);
             }
             unknown => {
-                if (self.is_digit(unknown)) {
+                if self.is_digit(unknown) {
                     let token = self.number()?;
                     self.add_token(token);
+                    return Ok(());
+                } else if self.is_alpha(unknown) {
+                    let token = self.identifier();
+                    self.add_token(token);
+                    return Ok(());
                 }
                 return Err(Error::UnexceptedChar(unknown));
             }
         };
 
         Ok(())
+    }
+
+    fn identifier(&mut self) -> Token {
+        while self.is_alphanumeric(self.peek()) {
+            self.advance();
+        }
+
+        let value = self.source[self.start..self.current].to_owned();
+        let token = KEYWORDS.get(&value);
+
+        if let Some(token_type) = token {
+            return self.get_token(token_type.to_owned(), None);
+        }
+
+        return self.get_token(TokenType::Identifier, None);
+    }
+
+    fn is_alphanumeric(&self, c: char) -> bool {
+        return self.is_alpha(c) || self.is_digit(c);
+    }
+
+    fn is_alpha(&self, c: char) -> bool {
+        return c.is_ascii_alphabetic() || c == '_';
     }
 
     fn number(&mut self) -> Result<Token, Error> {
@@ -153,7 +203,7 @@ impl Scanner {
 
         let value = self.source[self.start..self.current]
             .parse::<f64>()
-            .unwrap();
+            .map_err(|err| Error::ParseError(err))?;
 
         Ok(self.get_token(TokenType::Number, Some(Literal::Number(value))))
     }
