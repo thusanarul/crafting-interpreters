@@ -35,11 +35,11 @@ impl From<scanner::Errors> for Error {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() > 1 {
+    if args.len() > 2 {
         println!("Usage: jlox [script]");
         process::exit(64)
-    } else if args.len() == 1 {
-        run_file(&args[0]).unwrap()
+    } else if args.len() == 2 {
+        run_file(&args[1]).unwrap()
     } else {
         run_prompt().unwrap();
     }
@@ -48,8 +48,7 @@ fn main() {
 fn run_file(path: &String) -> Result<(), Error> {
     let bytes: Vec<u8> = fs::read(path)?;
 
-    println!("{:?}", path);
-    // run(&bytes)?;
+    run(&bytes)?;
     Ok(())
 }
 
