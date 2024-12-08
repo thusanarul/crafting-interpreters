@@ -6,6 +6,8 @@ use thiserror::Error;
 pub(crate) enum Error {
     #[error("invalid char: {0}")]
     UnexceptedChar(char),
+    #[error("unterminated string at line: {0}")]
+    UnterminatedString(i32),
 }
 
 #[derive(Debug, Clone)]
@@ -68,42 +70,42 @@ impl Scanner {
 
     fn scan_token(&mut self) -> Result<(), Error> {
         match self.advance() {
-            '(' => self.add_token(TokenType::LeftParen),
-            ')' => self.add_token(TokenType::RightParen),
-            '{' => self.add_token(TokenType::LeftBrace),
-            '}' => self.add_token(TokenType::RightBrace),
-            ',' => self.add_token(TokenType::Comma),
-            '.' => self.add_token(TokenType::Dot),
-            '-' => self.add_token(TokenType::Minus),
-            '+' => self.add_token(TokenType::Plus),
-            ';' => self.add_token(TokenType::Semicolon),
-            '*' => self.add_token(TokenType::Star),
+            '(' => self.get_and_add_token(TokenType::LeftParen),
+            ')' => self.get_and_add_token(TokenType::RightParen),
+            '{' => self.get_and_add_token(TokenType::LeftBrace),
+            '}' => self.get_and_add_token(TokenType::RightBrace),
+            ',' => self.get_and_add_token(TokenType::Comma),
+            '.' => self.get_and_add_token(TokenType::Dot),
+            '-' => self.get_and_add_token(TokenType::Minus),
+            '+' => self.get_and_add_token(TokenType::Plus),
+            ';' => self.get_and_add_token(TokenType::Semicolon),
+            '*' => self.get_and_add_token(TokenType::Star),
             '!' => {
                 if self.match_char('=') {
-                    self.add_token(TokenType::BangEqual)
+                    self.get_and_add_token(TokenType::BangEqual)
                 } else {
-                    self.add_token(TokenType::Bang)
+                    self.get_and_add_token(TokenType::Bang)
                 }
             }
             '=' => {
                 if self.match_char('=') {
-                    self.add_token(TokenType::EqualEqual)
+                    self.get_and_add_token(TokenType::EqualEqual)
                 } else {
-                    self.add_token(TokenType::Equal)
+                    self.get_and_add_token(TokenType::Equal)
                 }
             }
             '<' => {
                 if self.match_char('=') {
-                    self.add_token(TokenType::LessEqual)
+                    self.get_and_add_token(TokenType::LessEqual)
                 } else {
-                    self.add_token(TokenType::Less)
+                    self.get_and_add_token(TokenType::Less)
                 }
             }
             '>' => {
                 if self.match_char('=') {
-                    self.add_token(TokenType::GreaterEqual)
+                    self.get_and_add_token(TokenType::GreaterEqual)
                 } else {
-                    self.add_token(TokenType::Greater)
+                    self.get_and_add_token(TokenType::Greater)
                 }
             }
             '/' => {
@@ -113,13 +115,83 @@ impl Scanner {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenType::Slash)
+                    self.get_and_add_token(TokenType::Slash)
                 }
             }
-            unexpected => return Err(Error::UnexceptedChar(unexpected)),
+            ' ' | '\r' | '\t' => {}
+            '\n' => {
+                self.line = self.line + 1;
+            }
+            '"' => {
+                let token = self.string()?;
+                self.add_token(token);
+            }
+            unknown => {
+                if (self.is_digit(unknown)) {
+                    let token = self.number()?;
+                    self.add_token(token);
+                }
+                return Err(Error::UnexceptedChar(unknown));
+            }
         };
 
         Ok(())
+    }
+
+    fn number(&mut self) -> Result<Token, Error> {
+        while self.is_digit(self.peek()) {
+            self.advance();
+        }
+
+        if self.peek() == '.' && self.is_digit(self.peek_next()) {
+            self.advance();
+
+            while self.is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+
+        let value = self.source[self.start..self.current]
+            .parse::<f64>()
+            .unwrap();
+
+        Ok(self.get_token(TokenType::Number, Some(Literal::Number(value))))
+    }
+
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() {
+            return '\0';
+        }
+
+        return self
+            .source
+            .chars()
+            .nth(self.current + 1)
+            .expect("Could not get char from string");
+    }
+
+    fn is_digit(&self, c: char) -> bool {
+        return c >= '0' && c <= '9';
+    }
+
+    fn string(&mut self) -> Result<Token, Error> {
+        // Consume chars until we hit the '"' that ends the string.
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() != '\n' {
+                self.line = self.line + 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return Err(Error::UnterminatedString(self.line.clone()));
+        }
+
+        self.advance();
+
+        // NOTE: If Lox supported escape sequences like \n, we'd unescape those here.
+        let value = self.source[self.start..self.current].to_owned();
+        Ok(self.get_token(TokenType::String, Some(Literal::String(value))))
     }
 
     fn get_token(&self, token_type: TokenType, literal: Option<Literal>) -> Token {
@@ -127,8 +199,12 @@ impl Scanner {
         return Token::new(token_type, lexeme, literal, self.line);
     }
 
-    fn add_token(&mut self, token_type: TokenType) {
+    fn get_and_add_token(&mut self, token_type: TokenType) {
         let token = self.get_token(token_type, None);
+        self.add_token(token);
+    }
+
+    fn add_token(&mut self, token: Token) {
         self.tokens.push(token);
     }
 
