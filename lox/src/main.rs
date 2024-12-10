@@ -57,7 +57,9 @@ fn run_prompt() -> Result<(), Error> {
     let mut buf = String::new();
 
     loop {
-        println!("> ");
+        print!("> ");
+        // Flush stdout because we call print! and not println!. The buffer is only flushed when we print a newline.
+        io::stdout().flush()?;
         io::stdin().read_line(&mut buf)?;
 
         if buf == "" {
