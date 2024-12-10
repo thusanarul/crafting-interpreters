@@ -307,7 +307,7 @@ impl Scanner {
 }
 
 #[derive(Debug, Clone)]
-enum Literal {
+pub enum Literal {
     Number(f64),
     String(String),
     // Probably other stuff?
@@ -343,7 +343,7 @@ impl Display for Token {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum TokenType {
+pub enum TokenType {
     // Single-character tokens.
     LeftParen,
     RightParen,
