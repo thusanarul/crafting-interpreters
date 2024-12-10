@@ -136,6 +136,8 @@ impl Scanner {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
+                } else if self.match_char('*') {
+                    self.consume_block_comment();
                 } else {
                     self.get_and_add_token(TokenType::Slash)
                 }
@@ -163,6 +165,38 @@ impl Scanner {
         };
 
         Ok(())
+    }
+
+    fn consume_block_comment(&mut self) {
+        let mut count = 1;
+        loop {
+            match self.peek() {
+                '/' => {
+                    self.advance();
+                    if self.peek() == '*' {
+                        self.advance();
+                        count = count + 1;
+                    }
+                }
+                '*' => {
+                    self.advance();
+                    if self.peek() == '/' {
+                        self.advance();
+                        count = count - 1;
+                        if count == 0 {
+                            break;
+                        }
+                    }
+                }
+                '\n' => {
+                    self.line = self.line + 1;
+                    self.advance();
+                }
+                _ => {
+                    self.advance();
+                }
+            }
+        }
     }
 
     fn identifier(&mut self) -> Token {
@@ -217,6 +251,18 @@ impl Scanner {
             .source
             .chars()
             .nth(self.current + 1)
+            .expect("Could not get char from string");
+    }
+
+    fn peek(&self) -> char {
+        if self.is_at_end() {
+            return '\0';
+        }
+
+        return self
+            .source
+            .chars()
+            .nth(self.current)
             .expect("Could not get char from string");
     }
 
@@ -291,18 +337,6 @@ impl Scanner {
 
         self.current = self.current + 1;
         return true;
-    }
-
-    fn peek(&self) -> char {
-        if self.is_at_end() {
-            return '\0';
-        }
-
-        return self
-            .source
-            .chars()
-            .nth(self.current)
-            .expect("COuld not get char from string");
     }
 }
 
