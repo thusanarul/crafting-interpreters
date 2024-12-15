@@ -23,7 +23,7 @@ impl AstPrinter {
         Self
     }
 
-    fn parenthesize(&mut self, name: String, exprs: Vec<&Expr>) -> String {
+    fn parenthesize(&mut self, name: &str, exprs: Vec<&Expr>) -> String {
         let mut buf = String::new();
 
         buf.write_str(&format!("({name}"))
@@ -59,7 +59,7 @@ impl Visitor<String> for AstPrinter {
                     .expect("Failed to write string");
             }
             Expr::Grouping(expr) => {
-                buf.write_str(&self.parenthesize("group".to_owned(), vec![expr.as_ref()]))
+                buf.write_str(&self.parenthesize("group", vec![expr.as_ref()]))
                     .expect("Failed to write string");
             }
             Expr::Unary(op, rhs) => {

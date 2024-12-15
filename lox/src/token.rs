@@ -34,8 +34,8 @@ impl Token {
         }
     }
 
-    pub fn lexeme(&self) -> String {
-        self.lexeme.clone()
+    pub fn lexeme(&self) -> &str {
+        &self.lexeme
     }
 }
 
