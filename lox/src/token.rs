@@ -33,6 +33,10 @@ impl Token {
             line,
         }
     }
+
+    pub fn lexeme(&self) -> String {
+        self.lexeme.clone()
+    }
 }
 
 impl Display for Token {
