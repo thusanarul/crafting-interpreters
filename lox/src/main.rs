@@ -10,8 +10,9 @@ use std::{
     process,
 };
 
-use scanner::{Scanner, Token};
+use scanner::Scanner;
 use thiserror::Error;
+use token::Token;
 
 #[derive(Error, Debug)]
 enum Error {
