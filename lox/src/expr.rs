@@ -2,12 +2,18 @@ use std::fmt::Write;
 
 use crate::token::{self, Token};
 
-#[derive(Debug)]
-enum Expr {
+#[derive(Debug, Clone)]
+pub enum Expr {
     Binary(Box<Expr>, BinaryOperator, Box<Expr>),
     Grouping(Box<Expr>),
     Literal(token::Literal),
     Unary(UnaryOperator, Box<Expr>),
+}
+
+impl From<Box<Expr>> for Expr {
+    fn from(value: Box<Expr>) -> Self {
+        value.as_ref().to_owned()
+    }
 }
 
 type BinaryOperator = Token;

@@ -1,10 +1,31 @@
 use std::fmt::Display;
 
+use thiserror::Error;
+
 #[derive(Debug, Clone)]
 pub enum Literal {
     Number(f64),
     String(String),
-    // Probably other stuff?
+    True,
+    False,
+    Nil, // Probably other stuff?
+}
+
+impl From<&TokenType> for Literal {
+    fn from(value: &TokenType) -> Self {
+        match value {
+            TokenType::True => Literal::True,
+            TokenType::False => Literal::False,
+            TokenType::Nil => Literal::Nil,
+            _ => {
+                eprintln!(
+                    "Tried to convert invalid TokenType to Literal: {:?}. Returning nil.",
+                    value
+                );
+                Literal::Nil
+            }
+        }
+    }
 }
 
 impl Display for Literal {
@@ -12,6 +33,9 @@ impl Display for Literal {
         match self {
             Literal::Number(val) => write!(f, "{}", val),
             Literal::String(val) => write!(f, "{}", val),
+            Literal::True => write!(f, "{}", true),
+            Literal::False => write!(f, "{}", false),
+            Literal::Nil => write!(f, "nil"),
         }
     }
 }
@@ -37,6 +61,14 @@ impl Token {
     pub fn lexeme(&self) -> &str {
         &self.lexeme
     }
+
+    pub fn token_type(&self) -> &TokenType {
+        &self.token_type
+    }
+
+    pub fn literal(&self) -> Option<Literal> {
+        self.literal.to_owned()
+    }
 }
 
 impl Display for Token {
@@ -49,7 +81,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
