@@ -18,6 +18,13 @@ pub(crate) enum Error {
     EmptyLiteral(Token),
     #[error("Unexpected token: {0:?} in line {1}")]
     UnexpectedToken(Token, i32),
+    #[error("Mismatched token: Expected '{expected:?}' and found '{actual:?}' in line {line}.\n{message}")]
+    MismatchedToken {
+        line: i32,
+        expected: TokenType,
+        actual: TokenType,
+        message: String,
+    },
 }
 
 type PResult<T> = Result<T, Error>;
@@ -172,7 +179,18 @@ impl Parser {
             .ok_or(Error::OutOfBounds(self.current - 1))
     }
 
-    fn consume(&self, token_type: TokenType, error_message: String) -> Token {
-        todo!()
+    fn consume(&mut self, token_type: TokenType, error_message: String) -> PResult<Token> {
+        if self.check(&token_type) {
+            return Ok(self.advance().clone());
+        }
+
+        let actual = self.peek()?.clone();
+
+        return Err(Error::MismatchedToken {
+            actual: actual.token_type().clone(),
+            expected: token_type,
+            line: actual.line().clone(),
+            message: error_message,
+        });
     }
 }

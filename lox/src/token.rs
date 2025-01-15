@@ -69,6 +69,10 @@ impl Token {
     pub fn literal(&self) -> Option<Literal> {
         self.literal.to_owned()
     }
+
+    pub fn line(&self) -> &i32 {
+        &self.line
+    }
 }
 
 impl Display for Token {
