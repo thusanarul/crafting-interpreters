@@ -11,6 +11,8 @@ use std::{
     process,
 };
 
+use expr::AstPrinter;
+use parser::Parser;
 use scanner::Scanner;
 use thiserror::Error;
 use token::Token;
@@ -81,10 +83,15 @@ fn run(bytes: &[u8]) -> Result<(), Error> {
     let mut scanner = Scanner::new(bytes);
 
     let tokens: Vec<Token> = scanner.scan_tokens()?;
+    let mut parser = Parser::new(tokens);
 
-    for token in tokens {
-        println!("{:?}", token)
+    let expr = parser.parse();
+
+    if let Err(err) = expr.clone() {
+        eprintln!("{}", err)
     }
+
+    println!("{}", AstPrinter::new().print(&expr.unwrap()));
 
     Ok(())
 }

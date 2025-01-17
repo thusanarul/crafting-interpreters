@@ -69,7 +69,7 @@ impl Visitor<String> for RPNPrinter {
     }
 }
 
-struct AstPrinter;
+pub struct AstPrinter;
 
 impl AstPrinter {
     pub fn new() -> Self {

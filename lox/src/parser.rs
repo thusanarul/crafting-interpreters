@@ -5,7 +5,7 @@ use crate::{
     token::{Token, TokenType},
 };
 
-struct Parser {
+pub struct Parser {
     tokens: Vec<Token>,
     current: i32,
 }
@@ -25,13 +25,19 @@ pub(crate) enum Error {
         actual: TokenType,
         message: String,
     },
+    #[error("Unable to find boundary (keyword or semicolon) when synchronizing parser state")]
+    SyncBoundaryNotFound,
 }
 
 type PResult<T> = Result<T, Error>;
 
 impl Parser {
-    fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, current: 0 }
+    }
+
+    pub fn parse(&mut self) -> PResult<Expr> {
+        self.expression()
     }
 
     fn expression(&mut self) -> PResult<Expr> {
@@ -122,7 +128,7 @@ impl Parser {
             self.consume(
                 TokenType::RightParen,
                 "Expect ')' after expression.".to_owned(),
-            );
+            )?;
             return Ok(Expr::Grouping(expr.into()));
         }
 
@@ -192,5 +198,30 @@ impl Parser {
             line: actual.line().clone(),
             message: error_message,
         });
+    }
+
+    fn synchronize(&mut self) -> PResult<()> {
+        self.advance();
+        while !self.is_at_end() {
+            if self.previous()?.token_type() == &TokenType::Semicolon {
+                return Ok(());
+            }
+
+            match self.peek()?.token_type() {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return Ok(()),
+                _ => (),
+            }
+
+            self.advance();
+        }
+
+        Err(Error::SyncBoundaryNotFound)
     }
 }
