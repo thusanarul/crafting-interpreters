@@ -64,6 +64,7 @@ fn run_prompt() -> Result<(), Error> {
         print!("> ");
         // Flush stdout because we call print! and not println!. The buffer is only flushed when we print a newline.
         io::stdout().flush()?;
+        buf.clear();
         io::stdin().read_line(&mut buf)?;
 
         if buf == "" {
