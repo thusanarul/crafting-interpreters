@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use thiserror::Error;
-
 #[derive(Debug, Clone)]
 pub enum Literal {
     Number(f64),

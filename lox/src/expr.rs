@@ -20,7 +20,7 @@ impl From<Box<Expr>> for Expr {
 type BinaryOperator = Token;
 type UnaryOperator = Token;
 
-trait Visitor<T> {
+pub trait Visitor<T> {
     fn visit_expr(&mut self, expr: &Expr) -> T;
 }
 
