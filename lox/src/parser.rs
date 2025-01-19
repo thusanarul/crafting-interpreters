@@ -40,10 +40,12 @@ impl Parser {
         self.expression()
     }
 
+    // grammar: -> equality ;
     fn expression(&mut self) -> PResult<Expr> {
         self.equality()
     }
 
+    // grammar: -> comparison ( ( "!=" | "==") comparison )* ;
     fn equality(&mut self) -> PResult<Expr> {
         let mut _expr = self.comparison()?;
 
@@ -58,6 +60,7 @@ impl Parser {
         return Ok(_expr);
     }
 
+    // grammar: -> term ( ( ">" | ">=" | "<" | "<=") term )* ;
     fn comparison(&mut self) -> PResult<Expr> {
         let mut _expr = self.term()?;
 
@@ -76,6 +79,7 @@ impl Parser {
         return Ok(_expr);
     }
 
+    // grammar: -> factor ( ( "-" | "+") factor )* ;
     fn term(&mut self) -> PResult<Expr> {
         let mut _expr = self.factor()?;
 
@@ -89,6 +93,7 @@ impl Parser {
         return Ok(_expr);
     }
 
+    // grammar: -> unary ( ( "/" | "*") unary )* ;
     fn factor(&mut self) -> PResult<Expr> {
         let mut _expr = self.unary()?;
 
@@ -102,12 +107,14 @@ impl Parser {
         return Ok(_expr);
     }
 
+    // grammar: -> ("!" | "-") unary | primary ;
     fn unary(&mut self) -> PResult<Expr> {
         if self.match_types(vec![TokenType::Bang, TokenType::Minus]) {}
 
         return self.primary();
     }
 
+    // grammar: -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
     fn primary(&mut self) -> PResult<Expr> {
         if self.match_types(vec![TokenType::False, TokenType::True, TokenType::Nil]) {
             let literal = self.previous()?;
