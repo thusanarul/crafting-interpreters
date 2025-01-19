@@ -88,7 +88,8 @@ fn run(bytes: &[u8]) -> Result<(), Error> {
     let expr = parser.parse();
 
     if let Err(err) = expr.clone() {
-        eprintln!("{}", err)
+        eprintln!("{}", err);
+        return Ok(());
     }
 
     println!("{}", AstPrinter::new().print(&expr.unwrap()));

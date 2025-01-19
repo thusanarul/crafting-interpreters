@@ -8,6 +8,7 @@ pub enum Expr {
     Grouping(Box<Expr>),
     Literal(token::Literal),
     Unary(UnaryOperator, Box<Expr>),
+    Condition(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 impl From<Box<Expr>> for Expr {
@@ -119,6 +120,12 @@ impl Visitor<String> for AstPrinter {
                 buf.write_str(&self.parenthesize(op.lexeme(), vec![rhs.as_ref()]))
                     .expect("Failed to write string");
             }
+            Expr::Condition(cond, inner_true, inner_false) => buf
+                .write_str(&self.parenthesize(
+                    "cond",
+                    vec![cond.as_ref(), inner_true.as_ref(), inner_false.as_ref()],
+                ))
+                .expect("Failed to write string"),
             unknown => panic!("Have not created for {:?}", &unknown),
         };
 

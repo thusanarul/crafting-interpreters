@@ -45,14 +45,31 @@ impl Parser {
         self.comma()
     }
 
-    // grammar: -> equality ( ( "," ) equality )* ;
+    // grammar: -> ternary ( ( "," ) ternary )* ;
     fn comma(&mut self) -> PResult<Expr> {
-        let mut expr = self.equality()?;
+        let mut expr = self.ternary()?;
 
         while self.match_types(vec![TokenType::Comma]) {
             let comma_operator = self.previous()?.to_owned();
-            let right = self.expression()?;
+            let right = self.ternary()?;
             expr = Expr::Binary(expr.into(), comma_operator, right.into())
+        }
+
+        return Ok(expr);
+    }
+
+    // grammar: -> equality ( ( "?" ) equality ( ":" ) equality )*
+    fn ternary(&mut self) -> PResult<Expr> {
+        let mut expr = self.equality()?;
+
+        while self.match_types(vec![TokenType::QuestionMark]) {
+            let inner_true = self.equality()?;
+
+            self.consume(TokenType::Colon, "Expect ':' after expression".to_owned())?;
+
+            let inner_false = self.equality()?;
+
+            expr = Expr::Condition(expr.into(), inner_true.into(), inner_false.into())
         }
 
         return Ok(expr);

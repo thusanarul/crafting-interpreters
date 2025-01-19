@@ -101,6 +101,8 @@ impl Scanner {
             '-' => self.get_and_add_token(TokenType::Minus),
             '+' => self.get_and_add_token(TokenType::Plus),
             ';' => self.get_and_add_token(TokenType::Semicolon),
+            ':' => self.get_and_add_token(TokenType::Colon),
+            '?' => self.get_and_add_token(TokenType::QuestionMark),
             '*' => self.get_and_add_token(TokenType::Star),
             '!' => {
                 if self.match_char('=') {
