@@ -40,9 +40,22 @@ impl Parser {
         self.expression()
     }
 
-    // grammar: -> equality ;
+    // grammar: -> comma
     fn expression(&mut self) -> PResult<Expr> {
-        self.equality()
+        self.comma()
+    }
+
+    // grammar: -> equality ( ( "," ) equality )* ;
+    fn comma(&mut self) -> PResult<Expr> {
+        let mut expr = self.equality()?;
+
+        while self.match_types(vec![TokenType::Comma]) {
+            let comma_operator = self.previous()?.to_owned();
+            let right = self.expression()?;
+            expr = Expr::Binary(expr.into(), comma_operator, right.into())
+        }
+
+        return Ok(expr);
     }
 
     // grammar: -> comparison ( ( "!=" | "==") comparison )* ;
