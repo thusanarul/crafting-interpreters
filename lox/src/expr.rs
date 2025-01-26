@@ -21,7 +21,8 @@ type BinaryOperator = Token;
 type UnaryOperator = Token;
 
 pub trait Visitor<T> {
-    fn visit_expr(&mut self, expr: &Expr) -> T;
+    type Output;
+    fn visit_expr(&self, expr: &Expr) -> Self::Output;
 }
 
 struct RPNPrinter;
@@ -37,7 +38,8 @@ impl RPNPrinter {
 }
 
 impl Visitor<String> for RPNPrinter {
-    fn visit_expr(&mut self, expr: &Expr) -> String {
+    type Output = String;
+    fn visit_expr(&self, expr: &Expr) -> String {
         let mut buf = String::new();
 
         match expr {
@@ -77,7 +79,7 @@ impl AstPrinter {
         Self
     }
 
-    fn parenthesize(&mut self, name: &str, exprs: Vec<&Expr>) -> String {
+    fn parenthesize(&self, name: &str, exprs: Vec<&Expr>) -> String {
         let mut buf = String::new();
 
         buf.write_str(&format!("({name}"))
@@ -100,7 +102,8 @@ impl AstPrinter {
 }
 
 impl Visitor<String> for AstPrinter {
-    fn visit_expr(&mut self, expr: &Expr) -> String {
+    type Output = String;
+    fn visit_expr(&self, expr: &Expr) -> String {
         let mut buf = String::new();
 
         match expr {
@@ -126,7 +129,6 @@ impl Visitor<String> for AstPrinter {
                     vec![cond.as_ref(), inner_true.as_ref(), inner_false.as_ref()],
                 ))
                 .expect("Failed to write string"),
-            unknown => panic!("Have not created for {:?}", &unknown),
         };
 
         return buf;

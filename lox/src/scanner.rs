@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use phf::phf_map;
 use thiserror::Error;
 
@@ -13,8 +15,22 @@ pub(crate) enum Error {
     ParseError(#[from] std::num::ParseFloatError),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub struct Errors(Vec<Error>);
+
+impl Display for Errors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let output = self
+            .0
+            .clone()
+            .into_iter()
+            .map(|err| format!("{err:?}"))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        write!(f, "{}", output)
+    }
+}
 
 impl Errors {
     fn new() -> Self {

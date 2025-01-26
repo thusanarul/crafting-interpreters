@@ -5,14 +5,13 @@ mod scanner;
 mod token;
 
 use std::{
-    env,
-    fmt::Display,
-    fs,
+    env, fs,
     io::{self, Write},
     process,
 };
 
 use expr::AstPrinter;
+use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 use thiserror::Error;
@@ -22,21 +21,10 @@ use token::Token;
 enum Error {
     #[error("io error: {0}")]
     Io(#[from] io::Error),
-    #[error("scanner errors: {0}")]
-    ScannerError(scanner::Errors),
-}
-
-impl Display for scanner::Errors {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: Do this better
-        write!(f, "{:?}", self)
-    }
-}
-
-impl From<scanner::Errors> for Error {
-    fn from(value: scanner::Errors) -> Self {
-        Self::ScannerError(value)
-    }
+    #[error("scanner errors: {0:?}")]
+    ScannerError(#[from] scanner::Errors),
+    #[error("runtime error: {0:?}")]
+    RuntimeError(#[from] interpreter::IError),
 }
 
 fn main() {
@@ -46,9 +34,14 @@ fn main() {
         println!("Usage: jlox [script]");
         process::exit(64)
     } else if args.len() == 2 {
-        run_file(&args[1]).unwrap()
+        if let Err(err) = run_file(&args[1]) {
+            match err {
+                Error::RuntimeError(_) => process::exit(70),
+                _ => process::exit(65),
+            }
+        }
     } else {
-        run_prompt().unwrap();
+        run_prompt()
     }
 }
 
@@ -59,10 +52,14 @@ fn run_file(path: &String) -> Result<(), Error> {
     Ok(())
 }
 
-fn run_prompt() -> Result<(), Error> {
+fn run_prompt() {
     let _ = io::stdout().flush();
-    let mut buf = String::new();
 
+    let _ = inner_prompt_runner();
+}
+
+fn inner_prompt_runner() -> Result<(), Error> {
+    let mut buf = String::new();
     loop {
         print!("> ");
         // Flush stdout because we call print! and not println!. The buffer is only flushed when we print a newline.
@@ -74,7 +71,9 @@ fn run_prompt() -> Result<(), Error> {
             break;
         }
 
-        run(buf.as_bytes())?
+        if let Err(err) = run(buf.as_bytes()) {
+            eprintln!("{err}")
+        }
     }
 
     Ok(())
@@ -93,7 +92,11 @@ fn run(bytes: &[u8]) -> Result<(), Error> {
         return Ok(());
     }
 
-    println!("{}", AstPrinter::new().print(&expr.unwrap()));
+    println!("{}", AstPrinter::new().print(&expr.clone().unwrap()));
+
+    let interpreter = Interpreter::new();
+
+    interpreter.interpret(&expr.unwrap());
 
     Ok(())
 }

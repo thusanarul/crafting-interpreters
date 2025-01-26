@@ -1,10 +1,13 @@
-use std::ops::{Add, Div, Mul, Neg, Not, Sub};
+use std::{
+    fmt::Display,
+    ops::{Add, Div, Mul, Neg, Not, Sub},
+};
 
 use thiserror::Error;
 
 use crate::{
     expr::{Expr, Visitor},
-    token::{Literal, TokenType},
+    token::{Literal, Token, TokenType},
 };
 
 // NOTE: Difference between Literal and Value
@@ -34,13 +37,22 @@ impl Value {
 
         None
     }
+}
 
-    fn nil(&self) -> Option<()> {
-        if let Value::Nil = self {
-            return Some(());
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Number(n) => {
+                let mut s = format!("{:.1}", n);
+                if s.ends_with(".0") {
+                    s = format!("{:}", n);
+                }
+                write!(f, "{s}")
+            }
+            Value::String(s) => write!(f, "{s}"),
+            Value::Bool(b) => write!(f, "{}", b.to_string()),
+            Value::Nil => write!(f, "nil"),
         }
-
-        None
     }
 }
 
@@ -88,13 +100,13 @@ impl Add for Value {
         }
 
         if let (Some(left), Some(right)) = (self.string(), rhs.string()) {
-            return Ok(Value::String(left + &right));
+            return Ok(Value::String(format!("{left}{right}")));
         }
 
         Err(VError::InvalidOperation {
             operator: "Binary".to_owned(),
             operator_type: "+".to_owned(),
-            value_type: "{self:?}".to_owned(),
+            value_type: format!("{self:?}"),
         })
     }
 }
@@ -110,7 +122,7 @@ impl Sub for Value {
         Err(VError::InvalidOperation {
             operator: "Binary".to_owned(),
             operator_type: "-".to_owned(),
-            value_type: "{self:?}".to_owned(),
+            value_type: format!("{self:?}"),
         })
     }
 }
@@ -120,13 +132,14 @@ impl Div for Value {
 
     fn div(self, rhs: Self) -> Self::Output {
         if let (Some(left), Some(right)) = (self.number(), rhs.number()) {
+            // TODO(thusanarul): Check if right is zero and report division by zero error. Need to extend VError to support this.
             return Ok(Value::Number(left / right));
         }
 
         Err(VError::InvalidOperation {
             operator: "Binary".to_owned(),
             operator_type: "/".to_owned(),
-            value_type: "{self:?}".to_owned(),
+            value_type: format!("{self:?}"),
         })
     }
 }
@@ -142,7 +155,7 @@ impl Mul for Value {
         Err(VError::InvalidOperation {
             operator: "Binary".to_owned(),
             operator_type: "*".to_owned(),
-            value_type: "{self:?}".to_owned(),
+            value_type: format!("{self:?}"),
         })
     }
 }
@@ -189,68 +202,99 @@ impl From<&Literal> for Value {
     }
 }
 
-struct Interpreter;
+pub struct Interpreter;
 
 #[derive(Error, Debug, Clone)]
-enum IError {
-    #[error("Unary op error: {0}")]
-    UnaryOpError(#[source] VError),
-    #[error("Binary op error: {0}")]
-    BinaryOpError(#[source] VError),
-    #[error("Reached unexpected state when evaluating {operator:?} operator.")]
-    UnexpectedError { operator: TokenType },
+pub enum IError {
+    #[error("Unary op error: {source} at line {}", token.line())]
+    UnaryOpError {
+        #[source]
+        source: VError,
+        token: Token,
+    },
+    #[error("Binary op error: {source} at line {}", token.line())]
+    BinaryOpError {
+        #[source]
+        source: VError,
+        token: Token,
+    },
+    #[error("Reached unexpected state when evaluating token at line {}.", token.line())]
+    UnexpectedError { token: Token },
+}
+
+impl IError {
+    fn unary_op_error(err: VError, token: Token) -> Self {
+        Self::UnaryOpError { source: err, token }
+    }
+
+    fn binary_op_error(err: VError, token: Token) -> Self {
+        Self::BinaryOpError { source: err, token }
+    }
 }
 
 type IResult = Result<Value, IError>;
 
 impl Interpreter {
-    fn interpret_literal(&self, literal: &Literal) -> Value {
-        literal.into()
+    pub fn new() -> Self {
+        Self
     }
 
-    fn interpret_grouping(&mut self, expr: &Expr) -> Value {
+    pub fn interpret(&self, expr: &Expr) {
+        match self.visit_expr(expr) {
+            Ok(value) => println!("{value}"),
+            Err(err) => eprintln!("{err}"),
+        }
+    }
+    fn interpret_literal(&self, literal: &Literal) -> IResult {
+        Ok(literal.into())
+    }
+
+    fn interpret_grouping(&self, expr: &Expr) -> IResult {
         self.visit_expr(expr)
     }
 
-    fn interpret_unary(&mut self, operator: &TokenType, right: &Expr) -> IResult {
-        let right = self.visit_expr(right);
+    fn interpret_unary(&self, token: &Token, right: &Expr) -> IResult {
+        let right = self.visit_expr(right)?;
+        let operator = token.token_type();
 
         match operator {
             TokenType::Bang => {
                 let new_value = !right;
-                new_value.map_err(IError::UnaryOpError)
+                new_value.map_err(|err| IError::unary_op_error(err, token.clone()))
             }
             TokenType::Minus => {
                 let new_value = -right;
-                new_value.map_err(IError::BinaryOpError)
+                new_value.map_err(|err| IError::unary_op_error(err, token.clone()))
             }
             _ => Err(IError::UnexpectedError {
-                operator: *operator,
+                token: token.clone(),
             }),
         }
     }
 
-    fn interpret_binary(&mut self, operator: &TokenType, left: &Expr, right: &Expr) -> IResult {
+    fn interpret_binary(&self, token: &Token, left: &Expr, right: &Expr) -> IResult {
         // Evaluate operands left-to-right order
-        let left = self.visit_expr(left);
-        let right = self.visit_expr(right);
+        let left = self.visit_expr(left)?;
+        let right = self.visit_expr(right)?;
+
+        let operator = token.token_type();
 
         match operator {
             TokenType::Minus => {
                 let new_value = left - right;
-                new_value.map_err(IError::BinaryOpError)
+                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
             }
             TokenType::Slash => {
                 let new_value = left / right;
-                new_value.map_err(IError::BinaryOpError)
+                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
             }
             TokenType::Star => {
                 let new_value = left * right;
-                new_value.map_err(IError::BinaryOpError)
+                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
             }
             TokenType::Plus => {
                 let new_value = left + right;
-                new_value.map_err(IError::BinaryOpError)
+                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
             }
             TokenType::Greater => Ok(Value::Bool(left > right)),
             TokenType::GreaterEqual => Ok(Value::Bool(left >= right)),
@@ -259,32 +303,20 @@ impl Interpreter {
             TokenType::BangEqual => Ok(Value::Bool(left != right)),
             TokenType::EqualEqual => Ok(Value::Bool(left == right)),
             _ => Err(IError::UnexpectedError {
-                operator: *operator,
+                token: token.clone(),
             }),
         }
     }
 }
 
 impl Visitor<Value> for Interpreter {
-    fn visit_expr(&mut self, expr: &Expr) -> Value {
+    type Output = IResult;
+    fn visit_expr(&self, expr: &Expr) -> Self::Output {
         match expr {
-            Expr::Binary(left, token, right) => {
-                if let Ok(value) = self.interpret_binary(token.token_type(), left, right) {
-                    return value;
-                }
-
-                // TODO(thusanarul): figure out how to report error and stop execution?
-                panic!()
-            }
+            Expr::Binary(left, token, right) => self.interpret_binary(token, left, right),
             Expr::Grouping(expr) => self.interpret_grouping(expr.as_ref()),
             Expr::Literal(literal) => self.interpret_literal(literal),
-            Expr::Unary(token, expr) => {
-                if let Ok(value) = self.interpret_unary(token.token_type(), expr.as_ref()) {
-                    return value;
-                }
-                // TODO(thusanarul): figure out how to report error and stop execution?
-                panic!()
-            }
+            Expr::Unary(token, expr) => self.interpret_unary(token, expr.as_ref()),
             Expr::Condition(expr, expr1, expr2) => todo!(),
         }
     }
