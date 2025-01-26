@@ -6,7 +6,7 @@ use std::{
 use thiserror::Error;
 
 use crate::{
-    expr::{Expr, Visitor},
+    expr::{self, Expr, Stmt, Visitor},
     token::{Literal, Token, TokenType},
 };
 
@@ -202,8 +202,6 @@ impl From<&Literal> for Value {
     }
 }
 
-pub struct Interpreter;
-
 #[derive(Error, Debug, Clone)]
 pub enum IError {
     #[error("Unary op error: {source} at line {}", token.line())]
@@ -232,28 +230,31 @@ impl IError {
     }
 }
 
-type IResult = Result<Value, IError>;
+type IResult<V> = Result<V, IError>;
 
+pub struct Interpreter;
 impl Interpreter {
     pub fn new() -> Self {
         Self
     }
 
-    pub fn interpret(&self, expr: &Expr) {
-        match self.visit_expr(expr) {
-            Ok(value) => println!("{value}"),
-            Err(err) => eprintln!("{err}"),
+    pub fn interpret(&self, stmts: &Vec<Stmt>) {
+        for stmt in stmts {
+            if let Err(err) = self.visit_stmt(stmt) {
+                eprintln!("{err}");
+            }
         }
     }
-    fn interpret_literal(&self, literal: &Literal) -> IResult {
+
+    fn interpret_literal(&self, literal: &Literal) -> IResult<Value> {
         Ok(literal.into())
     }
 
-    fn interpret_grouping(&self, expr: &Expr) -> IResult {
+    fn interpret_grouping(&self, expr: &Expr) -> IResult<Value> {
         self.visit_expr(expr)
     }
 
-    fn interpret_unary(&self, token: &Token, right: &Expr) -> IResult {
+    fn interpret_unary(&self, token: &Token, right: &Expr) -> IResult<Value> {
         let right = self.visit_expr(right)?;
         let operator = token.token_type();
 
@@ -272,7 +273,7 @@ impl Interpreter {
         }
     }
 
-    fn interpret_binary(&self, token: &Token, left: &Expr, right: &Expr) -> IResult {
+    fn interpret_binary(&self, token: &Token, left: &Expr, right: &Expr) -> IResult<Value> {
         // Evaluate operands left-to-right order
         let left = self.visit_expr(left)?;
         let right = self.visit_expr(right)?;
@@ -310,8 +311,9 @@ impl Interpreter {
 }
 
 impl Visitor<Value> for Interpreter {
-    type Output = IResult;
-    fn visit_expr(&self, expr: &Expr) -> Self::Output {
+    type ExprOutput = IResult<Value>;
+    type StmtOutput = IResult<()>;
+    fn visit_expr(&self, expr: &Expr) -> Self::ExprOutput {
         match expr {
             Expr::Binary(left, token, right) => self.interpret_binary(token, left, right),
             Expr::Grouping(expr) => self.interpret_grouping(expr.as_ref()),
@@ -319,5 +321,19 @@ impl Visitor<Value> for Interpreter {
             Expr::Unary(token, expr) => self.interpret_unary(token, expr.as_ref()),
             Expr::Condition(expr, expr1, expr2) => todo!(),
         }
+    }
+
+    fn visit_stmt(&self, stmt: &Stmt) -> Self::StmtOutput {
+        match stmt {
+            expr::Stmt::Expression(expr) => {
+                self.visit_expr(expr)?;
+            }
+            expr::Stmt::Print(expr) => {
+                let value = self.visit_expr(expr)?;
+                println!("{value}");
+            }
+        };
+
+        Ok(())
     }
 }

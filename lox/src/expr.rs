@@ -20,56 +20,17 @@ impl From<Box<Expr>> for Expr {
 type BinaryOperator = Token;
 type UnaryOperator = Token;
 
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    Expression(Expr),
+    Print(Expr),
+}
+
 pub trait Visitor<T> {
-    type Output;
-    fn visit_expr(&self, expr: &Expr) -> Self::Output;
-}
-
-struct RPNPrinter;
-
-impl RPNPrinter {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn print(&mut self, expr: &Expr) -> String {
-        self.visit_expr(expr)
-    }
-}
-
-impl Visitor<String> for RPNPrinter {
-    type Output = String;
-    fn visit_expr(&self, expr: &Expr) -> String {
-        let mut buf = String::new();
-
-        match expr {
-            Expr::Literal(literal) => {
-                buf.write_str(&literal.to_string())
-                    .expect("Failed to write string");
-            }
-
-            Expr::Binary(lhs, op, rhs) => {
-                let left = &self.visit_expr(lhs.as_ref());
-                let right = &self.visit_expr(rhs.as_ref());
-
-                buf.write_str(&format!("{} {} {}", left, right, op.lexeme()))
-                    .expect("Failed to write str");
-            }
-
-            Expr::Grouping(expr) => buf
-                .write_str(&self.visit_expr(expr.as_ref()))
-                .expect("Failed to write str"),
-
-            Expr::Unary(op, rhs) => {
-                let right = &self.visit_expr(rhs.as_ref());
-                buf.write_str(&format!("{} {}", op.lexeme(), right))
-                    .expect("Failed to write str");
-            }
-            unknown => panic!("Have not created for {:?}", &unknown),
-        }
-
-        return buf;
-    }
+    type ExprOutput;
+    type StmtOutput;
+    fn visit_expr(&self, expr: &Expr) -> Self::ExprOutput;
+    fn visit_stmt(&self, stmt: &Stmt) -> Self::StmtOutput;
 }
 
 pub struct AstPrinter;
@@ -96,13 +57,18 @@ impl AstPrinter {
         return buf;
     }
 
-    pub fn print(&mut self, expr: &Expr) -> String {
-        self.visit_expr(expr)
+    pub fn print(&mut self, stmts: &Vec<Stmt>) -> String {
+        let mut output = vec![];
+        for stmt in stmts {
+            output.push(self.visit_stmt(stmt));
+        }
+        return output.join("\n");
     }
 }
 
 impl Visitor<String> for AstPrinter {
-    type Output = String;
+    type ExprOutput = String;
+    type StmtOutput = String;
     fn visit_expr(&self, expr: &Expr) -> String {
         let mut buf = String::new();
 
@@ -133,6 +99,15 @@ impl Visitor<String> for AstPrinter {
 
         return buf;
     }
+
+    fn visit_stmt(&self, stmt: &Stmt) -> Self::ExprOutput {
+        match stmt {
+            Stmt::Expression(expr) => format!("{}", self.visit_expr(expr)),
+            Stmt::Print(expr) => {
+                format!("(print {})", self.visit_expr(expr))
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -154,29 +129,8 @@ mod tests {
             ))))),
         );
 
-        let pretty = AstPrinter::new().print(&expression);
+        let pretty = AstPrinter::new().print(&vec![Stmt::Expression(expression)]);
 
         assert_eq!("(* (- 123) (group 45.67))", pretty)
-    }
-
-    #[test]
-    fn rpn_printer() {
-        let expression = Expr::Binary(
-            Box::new(Expr::Binary(
-                Box::new(Expr::Literal(Literal::Number(1.0))),
-                Token::new(TokenType::Plus, "+".to_owned(), None, 1),
-                Box::new(Expr::Literal(Literal::Number(2.0))),
-            )),
-            Token::new(TokenType::Star, "*".to_owned(), None, 1),
-            Box::new(Expr::Binary(
-                Box::new(Expr::Literal(Literal::Number(4.0))),
-                Token::new(TokenType::Plus, "-".to_owned(), None, 1),
-                Box::new(Expr::Literal(Literal::Number(3.0))),
-            )),
-        );
-
-        let rpn = RPNPrinter::new().print(&expression);
-
-        assert_eq!("1 2 + 4 3 - *", rpn);
     }
 }

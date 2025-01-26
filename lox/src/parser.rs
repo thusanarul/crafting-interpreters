@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::{
-    expr::Expr,
+    expr::{Expr, Stmt},
     token::{Token, TokenType},
 };
 
@@ -31,13 +31,44 @@ pub(crate) enum Error {
 
 type PResult<T> = Result<T, Error>;
 
+// Recursive descent parser
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> PResult<Expr> {
-        self.expression()
+    // grammar: -> statement* EOF
+    pub fn parse(&mut self) -> PResult<Vec<Stmt>> {
+        let mut statements: Vec<Stmt> = vec![];
+
+        while !self.is_at_end() {
+            statements.push(self.statement()?);
+        }
+
+        Ok(statements)
+    }
+
+    // grammar: -> exprStmt | printStmt
+    fn statement(&mut self) -> PResult<Stmt> {
+        if self.match_type(&TokenType::Print) {
+            return self.print_statement();
+        }
+
+        self.express_statement()
+    }
+
+    // grammar: -> "print" expression ";"
+    fn print_statement(&mut self) -> PResult<Stmt> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.".to_owned())?;
+        Ok(Stmt::Print(value))
+    }
+
+    // grammar: -> expression ";"
+    fn express_statement(&mut self) -> PResult<Stmt> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.".to_owned())?;
+        Ok(Stmt::Expression(value))
     }
 
     // grammar: -> comma
@@ -45,11 +76,11 @@ impl Parser {
         self.comma()
     }
 
-    // grammar: -> ternary ( ( "," ) ternary )* ;
+    // grammar: -> ternary ( ( "," ) ternary )*
     fn comma(&mut self) -> PResult<Expr> {
         let mut expr = self.ternary()?;
 
-        while self.match_types(vec![TokenType::Comma]) {
+        while self.match_type(&TokenType::Comma) {
             let comma_operator = self.previous()?.to_owned();
             let right = self.ternary()?;
             expr = Expr::Binary(expr.into(), comma_operator, right.into())
@@ -184,6 +215,15 @@ impl Parser {
             }
         }
         return false;
+    }
+
+    // NOTE: If token type is matched, the token is consumed with the call to advance()
+    fn match_type(&mut self, token_type: &TokenType) -> bool {
+        if self.check(token_type) {
+            self.advance();
+            return true;
+        }
+        false
     }
 
     fn check(&self, token_type: &TokenType) -> bool {

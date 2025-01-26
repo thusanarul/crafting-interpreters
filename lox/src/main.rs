@@ -85,18 +85,18 @@ fn run(bytes: &[u8]) -> Result<(), Error> {
     let tokens: Vec<Token> = scanner.scan_tokens()?;
     let mut parser = Parser::new(tokens);
 
-    let expr = parser.parse();
+    let stmts = parser.parse();
 
-    if let Err(err) = expr.clone() {
+    if let Err(err) = stmts.clone() {
         eprintln!("{}", err);
         return Ok(());
     }
 
-    println!("{}", AstPrinter::new().print(&expr.clone().unwrap()));
+    println!("{}", AstPrinter::new().print(&stmts.clone().unwrap()));
 
     let interpreter = Interpreter::new();
 
-    interpreter.interpret(&expr.unwrap());
+    interpreter.interpret(&stmts.unwrap());
 
     Ok(())
 }
