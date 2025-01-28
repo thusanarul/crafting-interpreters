@@ -37,6 +37,15 @@ impl Value {
 
         None
     }
+
+    fn is_true(&self) -> bool {
+        match self {
+            Value::Number(_) => true,
+            Value::String(_) => true,
+            Value::Bool(b) => *b,
+            Value::Nil => false,
+        }
+    }
 }
 
 impl Display for Value {
@@ -258,6 +267,7 @@ impl Interpreter {
         let right = self.visit_expr(right)?;
         let operator = token.token_type();
 
+        // TODO(thusanarul): verify this works
         match operator {
             TokenType::Bang => {
                 let new_value = !right;
@@ -308,6 +318,20 @@ impl Interpreter {
             }),
         }
     }
+    fn interpret_ternary_condition(
+        &self,
+        condition: &Expr,
+        inner_true: &Expr,
+        inner_false: &Expr,
+    ) -> IResult<Value> {
+        let c = self.visit_expr(condition)?;
+
+        return if c.is_true() {
+            self.visit_expr(inner_true)
+        } else {
+            self.visit_expr(inner_false)
+        };
+    }
 }
 
 impl Visitor<Value> for Interpreter {
@@ -319,7 +343,9 @@ impl Visitor<Value> for Interpreter {
             Expr::Grouping(expr) => self.interpret_grouping(expr.as_ref()),
             Expr::Literal(literal) => self.interpret_literal(literal),
             Expr::Unary(token, expr) => self.interpret_unary(token, expr.as_ref()),
-            Expr::Condition(expr, expr1, expr2) => todo!(),
+            Expr::Condition(condition, inner_true, inner_false) => {
+                self.interpret_ternary_condition(condition, inner_true, inner_false)
+            }
         }
     }
 

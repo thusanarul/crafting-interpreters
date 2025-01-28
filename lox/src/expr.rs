@@ -8,6 +8,7 @@ pub enum Expr {
     Grouping(Box<Expr>),
     Literal(token::Literal),
     Unary(UnaryOperator, Box<Expr>),
+    // ternary condition. it was a challenge.
     Condition(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
