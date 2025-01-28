@@ -6,6 +6,7 @@ use std::{
 use thiserror::Error;
 
 use crate::{
+    environment::{self, Environment},
     expr::{self, Expr, Stmt, Visitor},
     token::{Literal, Token, TokenType},
 };
@@ -13,7 +14,7 @@ use crate::{
 // NOTE: Difference between Literal and Value
 // A literal is something that appears in the user's source code, and is part of the parser's domain.
 // A value is produced by computation and don't necessarily exist in the code itself. They are an interpreter concept, part of the runtime world.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Number(f64),
     String(String),
@@ -225,29 +226,53 @@ pub enum IError {
         source: VError,
         token: Token,
     },
+    #[error("Environment error: {source} at line {}", token.line())]
+    EnvironmentError {
+        #[source]
+        source: environment::Error,
+        token: Token,
+    },
     #[error("Reached unexpected state when evaluating token at line {}.", token.line())]
     UnexpectedError { token: Token },
 }
 
 impl IError {
-    fn unary_op_error(err: VError, token: Token) -> Self {
-        Self::UnaryOpError { source: err, token }
+    fn unary_op_error(err: VError, token: &Token) -> Self {
+        Self::UnaryOpError {
+            source: err,
+            token: token.clone(),
+        }
     }
 
-    fn binary_op_error(err: VError, token: Token) -> Self {
-        Self::BinaryOpError { source: err, token }
+    fn binary_op_error(err: VError, token: &Token) -> Self {
+        Self::BinaryOpError {
+            source: err,
+            token: token.clone(),
+        }
+    }
+
+    fn environment_error(err: environment::Error, token: &Token) -> Self {
+        Self::EnvironmentError {
+            source: err,
+            token: token.clone(),
+        }
     }
 }
 
 type IResult<V> = Result<V, IError>;
 
-pub struct Interpreter;
+pub struct Interpreter {
+    environment: Environment,
+}
+
 impl Interpreter {
     pub fn new() -> Self {
-        Self
+        Self {
+            environment: Environment::new(),
+        }
     }
 
-    pub fn interpret(&self, stmts: &Vec<Stmt>) {
+    pub fn interpret(&mut self, stmts: &Vec<Stmt>) {
         for stmt in stmts {
             if let Err(err) = self.visit_stmt(stmt) {
                 eprintln!("{err}");
@@ -271,11 +296,11 @@ impl Interpreter {
         match operator {
             TokenType::Bang => {
                 let new_value = !right;
-                new_value.map_err(|err| IError::unary_op_error(err, token.clone()))
+                new_value.map_err(|err| IError::unary_op_error(err, &token))
             }
             TokenType::Minus => {
                 let new_value = -right;
-                new_value.map_err(|err| IError::unary_op_error(err, token.clone()))
+                new_value.map_err(|err| IError::unary_op_error(err, &token))
             }
             _ => Err(IError::UnexpectedError {
                 token: token.clone(),
@@ -293,19 +318,19 @@ impl Interpreter {
         match operator {
             TokenType::Minus => {
                 let new_value = left - right;
-                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
+                new_value.map_err(|err| IError::binary_op_error(err, &token))
             }
             TokenType::Slash => {
                 let new_value = left / right;
-                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
+                new_value.map_err(|err| IError::binary_op_error(err, &token))
             }
             TokenType::Star => {
                 let new_value = left * right;
-                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
+                new_value.map_err(|err| IError::binary_op_error(err, &token))
             }
             TokenType::Plus => {
                 let new_value = left + right;
-                new_value.map_err(|err| IError::binary_op_error(err, token.clone()))
+                new_value.map_err(|err| IError::binary_op_error(err, &token))
             }
             TokenType::Greater => Ok(Value::Bool(left > right)),
             TokenType::GreaterEqual => Ok(Value::Bool(left >= right)),
@@ -318,6 +343,7 @@ impl Interpreter {
             }),
         }
     }
+
     fn interpret_ternary_condition(
         &self,
         condition: &Expr,
@@ -346,10 +372,15 @@ impl Visitor<Value> for Interpreter {
             Expr::Condition(condition, inner_true, inner_false) => {
                 self.interpret_ternary_condition(condition, inner_true, inner_false)
             }
+            Expr::Variable(token) => self
+                .environment
+                .get(token)
+                .map(|value| value.clone())
+                .map_err(|err| IError::environment_error(err, token)),
         }
     }
 
-    fn visit_stmt(&self, stmt: &Stmt) -> Self::StmtOutput {
+    fn visit_stmt(&mut self, stmt: &Stmt) -> Self::StmtOutput {
         match stmt {
             expr::Stmt::Expression(expr) => {
                 self.visit_expr(expr)?;
@@ -357,6 +388,14 @@ impl Visitor<Value> for Interpreter {
             expr::Stmt::Print(expr) => {
                 let value = self.visit_expr(expr)?;
                 println!("{value}");
+            }
+            expr::Stmt::Var(name, initializer) => {
+                let mut value = Value::Nil;
+                if let Some(expr) = initializer {
+                    value = self.visit_expr(&expr)?;
+                }
+
+                self.environment.define(name.lexeme(), value);
             }
         };
 

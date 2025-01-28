@@ -37,15 +37,47 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    // grammar: -> statement* EOF
+    // grammar: -> declaration* EOF
     pub fn parse(&mut self) -> PResult<Vec<Stmt>> {
         let mut statements: Vec<Stmt> = vec![];
 
         while !self.is_at_end() {
-            statements.push(self.statement()?);
+            match self.declaration() {
+                Ok(stmt) => statements.push(stmt),
+                Err(_) => {
+                    self.synchronize()?;
+                }
+            }
         }
 
         Ok(statements)
+    }
+
+    // grammar: -> varDecl | statement
+    fn declaration(&mut self) -> PResult<Stmt> {
+        if self.match_type(&TokenType::Var) {
+            return self.var_declaration();
+        }
+
+        return self.statement();
+    }
+
+    // grammar: -> "var" IDENTIFIER ( "=" expression )? ";"
+    fn var_declaration(&mut self) -> PResult<Stmt> {
+        let name = self.consume(TokenType::Identifier, "Expect variable name.".to_owned())?;
+
+        let mut initializer = None;
+
+        if self.match_type(&TokenType::Equal) {
+            initializer = Some(self.expression()?)
+        }
+
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.".to_owned(),
+        )?;
+
+        return Ok(Stmt::Var(name, initializer));
     }
 
     // grammar: -> exprStmt | printStmt
@@ -175,7 +207,7 @@ impl Parser {
         return self.primary();
     }
 
-    // grammar: -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+    // grammar: -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER
     fn primary(&mut self) -> PResult<Expr> {
         if self.match_types(vec![TokenType::False, TokenType::True, TokenType::Nil]) {
             let literal = self.previous()?;
@@ -189,6 +221,10 @@ impl Parser {
                 .ok_or(Error::EmptyLiteral(token.to_owned()))?;
 
             return Ok(Expr::Literal(literal));
+        }
+
+        if self.match_type(&TokenType::Identifier) {
+            return Ok(Expr::Variable(self.previous()?.to_owned()));
         }
 
         if self.match_types(vec![TokenType::LeftParen]) {

@@ -1,3 +1,4 @@
+mod environment;
 mod expr;
 mod interpreter;
 mod parser;
@@ -47,18 +48,20 @@ fn main() {
 
 fn run_file(path: &String) -> Result<(), Error> {
     let bytes: Vec<u8> = fs::read(path)?;
+    let mut interpreter = Interpreter::new();
 
-    run(&bytes)?;
+    run(&bytes, &mut interpreter)?;
     Ok(())
 }
 
 fn run_prompt() {
     let _ = io::stdout().flush();
 
-    let _ = inner_prompt_runner();
+    let mut interpreter = Interpreter::new();
+    let _ = inner_prompt_runner(&mut interpreter);
 }
 
-fn inner_prompt_runner() -> Result<(), Error> {
+fn inner_prompt_runner(interpreter: &mut Interpreter) -> Result<(), Error> {
     let mut buf = String::new();
     loop {
         print!("> ");
@@ -71,7 +74,7 @@ fn inner_prompt_runner() -> Result<(), Error> {
             break;
         }
 
-        if let Err(err) = run(buf.as_bytes()) {
+        if let Err(err) = run(buf.as_bytes(), interpreter) {
             eprintln!("{err}")
         }
     }
@@ -79,7 +82,7 @@ fn inner_prompt_runner() -> Result<(), Error> {
     Ok(())
 }
 
-fn run(bytes: &[u8]) -> Result<(), Error> {
+fn run(bytes: &[u8], interpreter: &mut Interpreter) -> Result<(), Error> {
     let mut scanner = Scanner::new(bytes);
 
     let tokens: Vec<Token> = scanner.scan_tokens()?;
@@ -93,8 +96,6 @@ fn run(bytes: &[u8]) -> Result<(), Error> {
     }
 
     println!("{}", AstPrinter::new().print(&stmts.clone().unwrap()));
-
-    let interpreter = Interpreter::new();
 
     interpreter.interpret(&stmts.unwrap());
 
