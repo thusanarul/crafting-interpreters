@@ -8,6 +8,7 @@ pub enum Expr {
     Grouping(Box<Expr>),
     Literal(token::Literal),
     Unary(UnaryOperator, Box<Expr>),
+    Variable(Name),
     // ternary condition. it was a challenge.
     Condition(Box<Expr>, Box<Expr>, Box<Expr>),
 }
@@ -20,11 +21,13 @@ impl From<Box<Expr>> for Expr {
 
 type BinaryOperator = Token;
 type UnaryOperator = Token;
+type Name = Token;
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Expression(Expr),
     Print(Expr),
+    Var(Name, Option<Expr>),
 }
 
 pub trait Visitor<T> {
@@ -96,6 +99,7 @@ impl Visitor<String> for AstPrinter {
                     vec![cond.as_ref(), inner_true.as_ref(), inner_false.as_ref()],
                 ))
                 .expect("Failed to write string"),
+            Expr::Variable(name) => todo!(),
         };
 
         return buf;
@@ -106,6 +110,13 @@ impl Visitor<String> for AstPrinter {
             Stmt::Expression(expr) => format!("{}", self.visit_expr(expr)),
             Stmt::Print(expr) => {
                 format!("(print {})", self.visit_expr(expr))
+            }
+            Stmt::Var(name, initializer) => {
+                if let Some(i) = initializer {
+                    format!("(var {name} {})", self.visit_expr(i))
+                } else {
+                    format!("(var {name} nil)")
+                }
             }
         }
     }
