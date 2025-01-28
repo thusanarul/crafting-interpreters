@@ -37,15 +37,24 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    // grammar: -> statement* EOF
+    // grammar: -> declaration* EOF
     pub fn parse(&mut self) -> PResult<Vec<Stmt>> {
         let mut statements: Vec<Stmt> = vec![];
 
         while !self.is_at_end() {
-            statements.push(self.statement()?);
+            statements.push(self.declaration()?);
         }
 
         Ok(statements)
+    }
+
+    // grammar: -> "var" IDENTIFIER ( "=" expression )? ";"
+    fn declaration(&mut self) -> PResult<Stmt> {
+        todo!();
+    }
+
+    fn var_declaration(&mut self) -> PResult<Stmt> {
+        todo!()
     }
 
     // grammar: -> exprStmt | printStmt
@@ -175,7 +184,7 @@ impl Parser {
         return self.primary();
     }
 
-    // grammar: -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+    // grammar: -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER
     fn primary(&mut self) -> PResult<Expr> {
         if self.match_types(vec![TokenType::False, TokenType::True, TokenType::Nil]) {
             let literal = self.previous()?;

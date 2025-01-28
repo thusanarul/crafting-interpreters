@@ -318,6 +318,7 @@ impl Interpreter {
             }),
         }
     }
+
     fn interpret_ternary_condition(
         &self,
         condition: &Expr,
@@ -346,6 +347,7 @@ impl Visitor<Value> for Interpreter {
             Expr::Condition(condition, inner_true, inner_false) => {
                 self.interpret_ternary_condition(condition, inner_true, inner_false)
             }
+            Expr::Variable(name) => todo!(),
         }
     }
 
@@ -358,6 +360,7 @@ impl Visitor<Value> for Interpreter {
                 let value = self.visit_expr(expr)?;
                 println!("{value}");
             }
+            expr::Stmt::Var(name, initializer) => todo!(),
         };
 
         Ok(())
