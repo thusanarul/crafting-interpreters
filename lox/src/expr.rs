@@ -8,6 +8,11 @@ pub enum Expr {
     Binary(Box<Expr>, BinaryOperator, Box<Expr>),
     Grouping(Box<Expr>),
     Literal(token::Literal),
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
     Unary(UnaryOperator, Box<Expr>),
     Variable(Name),
     // ternary condition. it was a challenge.
@@ -27,8 +32,17 @@ type Name = Token;
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Expression(Expr),
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
     Print(Expr),
     Var(Name, Option<Expr>),
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
     Block(Vec<Stmt>),
 }
 
@@ -110,6 +124,18 @@ impl Visitor<String> for AstPrinter {
                     self.parenthesize(name.lexeme(), vec![expr.as_ref()])
                 ))
                 .expect("Failed to write string"),
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => buf
+                .write_str(&format!(
+                    "({:?} (left {}) (right {}))",
+                    operator.token_type(),
+                    self.visit_expr(left),
+                    self.visit_expr(right)
+                ))
+                .expect("Failed to write string"),
         };
 
         return buf;
@@ -136,6 +162,33 @@ impl Visitor<String> for AstPrinter {
                     .join(" ");
 
                 format!("(block ({}))", statements)
+            }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                if let Some(else_branch) = else_branch {
+                    return format!(
+                        "(cond {} (then {}) (else {}))",
+                        self.visit_expr(condition),
+                        self.visit_stmt(then_branch),
+                        self.visit_stmt(else_branch)
+                    );
+                };
+
+                format!(
+                    "(cond {} (then {}))",
+                    self.visit_expr(condition),
+                    self.visit_stmt(then_branch)
+                )
+            }
+            Stmt::While { condition, body } => {
+                format!(
+                    "(while (cond {}) (body {})",
+                    self.visit_expr(condition),
+                    self.visit_stmt(body)
+                )
             }
         }
     }

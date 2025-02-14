@@ -39,7 +39,9 @@ impl Value {
         None
     }
 
-    fn is_true(&self) -> bool {
+    // Ruby's simple rule: false and nil are falsey. Everything else is truthy.
+    // So in Not trait impl, everything is just the opposite of the above line.
+    fn is_truthy(&self) -> bool {
         match self {
             Value::Number(_) => true,
             Value::String(_) => true,
@@ -170,18 +172,11 @@ impl Mul for Value {
     }
 }
 
-// Ruby's simple rule: false and nil are falsey. Everything else is truthy.
-// So in Not trait impl, everything is just the opposite of the above line.
 impl Not for Value {
-    type Output = VResult;
+    type Output = Value;
 
     fn not(self) -> Self::Output {
-        match self {
-            Value::Number(_) => Ok(Value::Bool(false)),
-            Value::String(_) => Ok(Value::Bool(false)),
-            Value::Bool(b) => Ok(Value::Bool(!b)),
-            Value::Nil => Ok(Value::Bool(true)),
-        }
+        return Value::Bool(self.is_truthy());
     }
 }
 
@@ -296,7 +291,7 @@ impl Interpreter {
         match operator {
             TokenType::Bang => {
                 let new_value = !right;
-                new_value.map_err(|err| IError::unary_op_error(err, &token))
+                Ok(new_value)
             }
             TokenType::Minus => {
                 let new_value = -right;
@@ -352,7 +347,7 @@ impl Interpreter {
     ) -> IResult<Value> {
         let c = self.visit_expr(condition)?;
 
-        return if c.is_true() {
+        return if c.is_truthy() {
             self.visit_expr(inner_true)
         } else {
             self.visit_expr(inner_false)
@@ -403,19 +398,36 @@ impl Visitor<Value> for Interpreter {
 
                 return Ok(value);
             }
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => {
+                let left = self.visit_expr(left)?;
+
+                if operator.token_type() == &TokenType::Or {
+                    if left.is_truthy() {
+                        return Ok(left);
+                    }
+                } else if !left.is_truthy() {
+                    return Ok(left);
+                }
+
+                return self.visit_expr(right);
+            }
         }
     }
 
     fn visit_stmt(&mut self, stmt: &Stmt) -> Self::StmtOutput {
         match stmt {
-            expr::Stmt::Expression(expr) => {
+            Stmt::Expression(expr) => {
                 self.visit_expr(expr)?;
             }
-            expr::Stmt::Print(expr) => {
+            Stmt::Print(expr) => {
                 let value = self.visit_expr(expr)?;
                 println!("{value}");
             }
-            expr::Stmt::Var(name, initializer) => {
+            Stmt::Var(name, initializer) => {
                 let mut value = Value::Nil;
                 if let Some(expr) = initializer {
                     value = self.visit_expr(&expr)?;
@@ -425,6 +437,22 @@ impl Visitor<Value> for Interpreter {
             }
             Stmt::Block(stmts) => {
                 self.execute_block(stmts, &Environment::new(Some(&self.environment)))?;
+            }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                if self.visit_expr(condition)?.is_truthy() {
+                    self.visit_stmt(then_branch)?;
+                } else if let Some(else_branch) = else_branch {
+                    self.visit_stmt(else_branch)?;
+                }
+            }
+            Stmt::While { condition, body } => {
+                while self.visit_expr(condition)?.is_truthy() {
+                    self.visit_stmt(body)?;
+                }
             }
         };
 

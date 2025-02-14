@@ -2,9 +2,10 @@ use thiserror::Error;
 
 use crate::{
     expr::{Expr, Stmt},
-    token::{Token, TokenType},
+    token::{self, Token, TokenType},
 };
 
+#[derive(Debug)]
 pub struct Parser {
     tokens: Vec<Token>,
     current: i32,
@@ -82,10 +83,22 @@ impl Parser {
         return Ok(Stmt::Var(name, initializer));
     }
 
-    // grammar: -> exprStmt | printStmt | block;
+    // grammar: -> exprStmt | forStmt | ifStmt | printStmt | whileStmt | block;
     fn statement(&mut self) -> PResult<Stmt> {
+        if self.match_type(&TokenType::If) {
+            return self.if_statement();
+        }
+
+        if self.match_type(&TokenType::For) {
+            return self.for_statement();
+        }
+
         if self.match_type(&TokenType::Print) {
             return self.print_statement();
+        }
+
+        if self.match_type(&TokenType::While) {
+            return self.while_statement();
         }
 
         if self.match_type(&TokenType::LeftBrace) {
@@ -93,6 +106,87 @@ impl Parser {
         }
 
         self.express_statement()
+    }
+
+    // grammar: -> "for" "(" ( varDecl | exprStmt | ";" )
+    //              expression? ";"
+    //              expression? ")" statement
+    // NOTE: Desugars into while_statment
+    fn for_statement(&mut self) -> PResult<Stmt> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
+
+        let mut initializer = None;
+        if self.match_type(&TokenType::Semicolon) {
+            initializer = None;
+        } else if self.match_type(&TokenType::Var) {
+            initializer = Some(self.var_declaration()?);
+        } else {
+            initializer = Some(self.express_statement()?);
+        }
+
+        let mut condition = None;
+        if !self.check(&TokenType::Semicolon) {
+            condition = Some(self.expression()?)
+        }
+
+        self.consume(TokenType::Semicolon, "Expect ';' after loop condition.")?;
+
+        let mut increment = None;
+        if self.check(&TokenType::RightParen) {
+            increment = Some(self.expression()?);
+        }
+
+        self.consume(TokenType::Semicolon, "Expect ')' after for clauses.")?;
+
+        let mut body = self.statement()?;
+
+        if let Some(increment) = increment {
+            body = Stmt::Block(vec![body, Stmt::Expression(increment)]);
+        }
+
+        body = Stmt::While {
+            condition: condition.unwrap_or(Expr::Literal(token::Literal::True)),
+            body: Box::new(body),
+        };
+
+        if let Some(initializer) = initializer {
+            body = Stmt::Block(vec![initializer, body]);
+        }
+
+        Ok(body)
+    }
+
+    // grammar: -> "while" "(" expression ")" statement
+    fn while_statement(&mut self) -> PResult<Stmt> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::LeftParen, "Expect ')' after condition.")?;
+        let body = self.statement()?;
+
+        Ok(Stmt::While {
+            condition,
+            body: Box::new(body),
+        })
+    }
+
+    // grammar: -> "if" "(" expression ")" statement ( "else" statement )?
+    fn if_statement(&mut self) -> PResult<Stmt> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after if condition.")?;
+
+        let then_branch = self.statement()?;
+        let else_branch = if self.match_type(&TokenType::Else) {
+            Some(self.statement()?)
+        } else {
+            None
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then_branch: Box::new(then_branch),
+            else_branch: else_branch.map(|e| Box::new(e)),
+        })
     }
 
     // grammar: -> "{" declaration "}"
@@ -126,9 +220,9 @@ impl Parser {
         self.assignment()
     }
 
-    // grammar: -> IDENTIFIER "=" assignment | equality
+    // grammar: -> IDENTIFIER "=" assignment | equality | logic_or
     fn assignment(&mut self) -> PResult<Expr> {
-        let expr = self.equality()?;
+        let expr = self.logic_or()?;
 
         if self.match_type(&TokenType::Equal) {
             let equals = self.previous().map(|e| e.clone())?;
@@ -144,6 +238,41 @@ impl Parser {
         return Ok(expr);
     }
 
+    // grammar: -> logic_and ( "or" logic_and )*
+    fn logic_or(&mut self) -> PResult<Expr> {
+        let mut expr = self.logic_and()?;
+
+        while self.match_type(&TokenType::Or) {
+            let operator = self.previous()?.clone();
+            let right = self.logic_and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
+    }
+
+    // grammar: -> equality ( "and" equality )*
+    fn logic_and(&mut self) -> PResult<Expr> {
+        let mut expr = self.equality()?;
+
+        while self.match_type(&TokenType::Or) {
+            let operator = self.previous()?.clone();
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
+    }
+
+    // TODO(thusanarul): how does comma and ternary fit into the grammar now?
     // grammar: -> ternary ( ( "," ) ternary )*
     fn comma(&mut self) -> PResult<Expr> {
         let mut expr = self.ternary()?;
