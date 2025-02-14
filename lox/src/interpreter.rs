@@ -268,7 +268,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            environment: Environment::new(),
+            environment: Environment::new(None),
         }
     }
 
@@ -284,11 +284,11 @@ impl Interpreter {
         Ok(literal.into())
     }
 
-    fn interpret_grouping(&self, expr: &Expr) -> IResult<Value> {
+    fn interpret_grouping(&mut self, expr: &Expr) -> IResult<Value> {
         self.visit_expr(expr)
     }
 
-    fn interpret_unary(&self, token: &Token, right: &Expr) -> IResult<Value> {
+    fn interpret_unary(&mut self, token: &Token, right: &Expr) -> IResult<Value> {
         let right = self.visit_expr(right)?;
         let operator = token.token_type();
 
@@ -308,7 +308,7 @@ impl Interpreter {
         }
     }
 
-    fn interpret_binary(&self, token: &Token, left: &Expr, right: &Expr) -> IResult<Value> {
+    fn interpret_binary(&mut self, token: &Token, left: &Expr, right: &Expr) -> IResult<Value> {
         // Evaluate operands left-to-right order
         let left = self.visit_expr(left)?;
         let right = self.visit_expr(right)?;
@@ -345,7 +345,7 @@ impl Interpreter {
     }
 
     fn interpret_ternary_condition(
-        &self,
+        &mut self,
         condition: &Expr,
         inner_true: &Expr,
         inner_false: &Expr,
@@ -358,12 +358,30 @@ impl Interpreter {
             self.visit_expr(inner_false)
         };
     }
+
+    fn execute_block(&mut self, statements: &[Stmt], environment: &Environment) -> IResult<()> {
+        let previous = self.environment.clone();
+
+        self.environment = environment.clone();
+
+        for stmt in statements {
+            // TODO: Find better pattern somewhat similar to try/finally
+            if let Err(err) = self.visit_stmt(&stmt) {
+                self.environment = previous;
+                return Err(err);
+            }
+        }
+
+        self.environment = previous;
+
+        Ok(())
+    }
 }
 
 impl Visitor<Value> for Interpreter {
     type ExprOutput = IResult<Value>;
     type StmtOutput = IResult<()>;
-    fn visit_expr(&self, expr: &Expr) -> Self::ExprOutput {
+    fn visit_expr(&mut self, expr: &Expr) -> Self::ExprOutput {
         match expr {
             Expr::Binary(left, token, right) => self.interpret_binary(token, left, right),
             Expr::Grouping(expr) => self.interpret_grouping(expr.as_ref()),
@@ -377,6 +395,14 @@ impl Visitor<Value> for Interpreter {
                 .get(token)
                 .map(|value| value.clone())
                 .map_err(|err| IError::environment_error(err, token)),
+            Expr::Assign(name, expr) => {
+                let value = self.visit_expr(expr.as_ref())?;
+                self.environment
+                    .assign(name, &value)
+                    .map_err(|err| IError::environment_error(err, name))?;
+
+                return Ok(value);
+            }
         }
     }
 
@@ -396,6 +422,9 @@ impl Visitor<Value> for Interpreter {
                 }
 
                 self.environment.define(name.lexeme(), value);
+            }
+            Stmt::Block(stmts) => {
+                self.execute_block(stmts, &Environment::new(Some(&self.environment)))?;
             }
         };
 

@@ -4,6 +4,7 @@ use crate::token::{self, Token};
 
 #[derive(Debug, Clone)]
 pub enum Expr {
+    Assign(Name, Box<Expr>),
     Binary(Box<Expr>, BinaryOperator, Box<Expr>),
     Grouping(Box<Expr>),
     Literal(token::Literal),
@@ -28,12 +29,13 @@ pub enum Stmt {
     Expression(Expr),
     Print(Expr),
     Var(Name, Option<Expr>),
+    Block(Vec<Stmt>),
 }
 
 pub trait Visitor<T> {
     type ExprOutput;
     type StmtOutput;
-    fn visit_expr(&self, expr: &Expr) -> Self::ExprOutput;
+    fn visit_expr(&mut self, expr: &Expr) -> Self::ExprOutput;
     fn visit_stmt(&mut self, stmt: &Stmt) -> Self::StmtOutput;
 }
 
@@ -44,7 +46,7 @@ impl AstPrinter {
         Self
     }
 
-    fn parenthesize(&self, name: &str, exprs: Vec<&Expr>) -> String {
+    fn parenthesize(&mut self, name: &str, exprs: Vec<&Expr>) -> String {
         let mut buf = String::new();
 
         buf.write_str(&format!("({name}"))
@@ -73,7 +75,7 @@ impl AstPrinter {
 impl Visitor<String> for AstPrinter {
     type ExprOutput = String;
     type StmtOutput = String;
-    fn visit_expr(&self, expr: &Expr) -> String {
+    fn visit_expr(&mut self, expr: &Expr) -> String {
         let mut buf = String::new();
 
         match expr {
@@ -102,6 +104,12 @@ impl Visitor<String> for AstPrinter {
             Expr::Variable(name) => buf
                 .write_str(&format!("(var {name})",))
                 .expect("Failed to write string"),
+            Expr::Assign(name, expr) => buf
+                .write_str(&format!(
+                    "(assign {})",
+                    self.parenthesize(name.lexeme(), vec![expr.as_ref()])
+                ))
+                .expect("Failed to write string"),
         };
 
         return buf;
@@ -119,6 +127,15 @@ impl Visitor<String> for AstPrinter {
                 } else {
                     format!("(var {name} nil)")
                 }
+            }
+            Stmt::Block(stmts) => {
+                let statements: String = stmts
+                    .iter()
+                    .map(|s| self.visit_stmt(&s))
+                    .collect::<Vec<String>>()
+                    .join(" ");
+
+                format!("(block ({}))", statements)
             }
         }
     }

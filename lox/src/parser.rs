@@ -27,6 +27,8 @@ pub(crate) enum Error {
     },
     #[error("Unable to find boundary (keyword or semicolon) when synchronizing parser state")]
     SyncBoundaryNotFound,
+    #[error("Invalid assignment target")]
+    InvalidAssignmentTarget(Token),
 }
 
 type PResult<T> = Result<T, Error>;
@@ -64,7 +66,7 @@ impl Parser {
 
     // grammar: -> "var" IDENTIFIER ( "=" expression )? ";"
     fn var_declaration(&mut self) -> PResult<Stmt> {
-        let name = self.consume(TokenType::Identifier, "Expect variable name.".to_owned())?;
+        let name = self.consume(TokenType::Identifier, "Expect variable name.")?;
 
         let mut initializer = None;
 
@@ -74,38 +76,72 @@ impl Parser {
 
         self.consume(
             TokenType::Semicolon,
-            "Expect ';' after variable declaration.".to_owned(),
+            "Expect ';' after variable declaration.",
         )?;
 
         return Ok(Stmt::Var(name, initializer));
     }
 
-    // grammar: -> exprStmt | printStmt
+    // grammar: -> exprStmt | printStmt | block;
     fn statement(&mut self) -> PResult<Stmt> {
         if self.match_type(&TokenType::Print) {
             return self.print_statement();
         }
 
+        if self.match_type(&TokenType::LeftBrace) {
+            return Ok(Stmt::Block(self.block()?));
+        }
+
         self.express_statement()
+    }
+
+    // grammar: -> "{" declaration "}"
+    fn block(&mut self) -> PResult<Vec<Stmt>> {
+        let mut statements = vec![];
+
+        while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(statements)
     }
 
     // grammar: -> "print" expression ";"
     fn print_statement(&mut self) -> PResult<Stmt> {
         let value = self.expression()?;
-        self.consume(TokenType::Semicolon, "Expect ';' after value.".to_owned())?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::Print(value))
     }
 
     // grammar: -> expression ";"
     fn express_statement(&mut self) -> PResult<Stmt> {
         let value = self.expression()?;
-        self.consume(TokenType::Semicolon, "Expect ';' after value.".to_owned())?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::Expression(value))
     }
 
-    // grammar: -> comma
+    // grammar: -> assignment
     fn expression(&mut self) -> PResult<Expr> {
-        self.comma()
+        self.assignment()
+    }
+
+    // grammar: -> IDENTIFIER "=" assignment | equality
+    fn assignment(&mut self) -> PResult<Expr> {
+        let expr = self.equality()?;
+
+        if self.match_type(&TokenType::Equal) {
+            let equals = self.previous().map(|e| e.clone())?;
+            let value = self.assignment()?;
+
+            if let Expr::Variable(variable) = expr {
+                return Ok(Expr::Assign(variable, Box::new(value)));
+            }
+
+            return Err(Error::InvalidAssignmentTarget(equals));
+        }
+
+        return Ok(expr);
     }
 
     // grammar: -> ternary ( ( "," ) ternary )*
@@ -128,7 +164,7 @@ impl Parser {
         while self.match_types(vec![TokenType::QuestionMark]) {
             let inner_true = self.equality()?;
 
-            self.consume(TokenType::Colon, "Expect ':' after expression".to_owned())?;
+            self.consume(TokenType::Colon, "Expect ':' after expression")?;
 
             let inner_false = self.equality()?;
 
@@ -229,10 +265,7 @@ impl Parser {
 
         if self.match_types(vec![TokenType::LeftParen]) {
             let expr = self.expression()?;
-            self.consume(
-                TokenType::RightParen,
-                "Expect ')' after expression.".to_owned(),
-            )?;
+            self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::Grouping(expr.into()));
         }
 
@@ -298,7 +331,7 @@ impl Parser {
             .ok_or(Error::OutOfBounds(self.current - 1))
     }
 
-    fn consume(&mut self, token_type: TokenType, error_message: String) -> PResult<Token> {
+    fn consume(&mut self, token_type: TokenType, error_message: &str) -> PResult<Token> {
         if self.check(&token_type) {
             return Ok(self.advance().clone());
         }
@@ -309,7 +342,7 @@ impl Parser {
             actual: actual.token_type().clone(),
             expected: token_type,
             line: actual.line().clone(),
-            message: error_message,
+            message: error_message.to_owned(),
         });
     }
 
