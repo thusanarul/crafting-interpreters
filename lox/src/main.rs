@@ -3,6 +3,7 @@ mod expr;
 mod interpreter;
 mod parser;
 mod scanner;
+mod tests;
 mod token;
 
 use std::{
@@ -46,7 +47,7 @@ fn main() {
     }
 }
 
-fn run_file(path: &String) -> Result<(), Error> {
+fn run_file(path: &str) -> Result<(), Error> {
     let bytes: Vec<u8> = fs::read(path)?;
     let mut interpreter = Interpreter::new();
 
