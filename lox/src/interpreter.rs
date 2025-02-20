@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::{
     environment::{self, Environment},
-    expr::{self, Expr, Stmt, Visitor},
+    expr::{Expr, Stmt, Visitor},
     token::{Literal, Token, TokenType},
 };
 
@@ -354,20 +354,23 @@ impl Interpreter {
         };
     }
 
+    // TODO: Figure out better pattern with enclosing environment
     fn execute_block(&mut self, statements: &[Stmt], environment: &Environment) -> IResult<()> {
-        let previous = self.environment.clone();
-
         self.environment = environment.clone();
 
         for stmt in statements {
             // TODO: Find better pattern somewhat similar to try/finally
             if let Err(err) = self.visit_stmt(&stmt) {
-                self.environment = previous;
+                if let Some(enclosing) = self.environment.enclosing() {
+                    self.environment = enclosing.clone()
+                }
                 return Err(err);
             }
         }
 
-        self.environment = previous;
+        if let Some(enclosing) = self.environment.enclosing() {
+            self.environment = enclosing.clone()
+        }
 
         Ok(())
     }
@@ -436,7 +439,7 @@ impl Visitor<Value> for Interpreter {
                 self.environment.define(name.lexeme(), value);
             }
             Stmt::Block(stmts) => {
-                self.execute_block(stmts, &Environment::new(Some(&self.environment)))?;
+                self.execute_block(stmts, &Environment::new(Some(self.environment.clone())))?;
             }
             Stmt::If {
                 condition,

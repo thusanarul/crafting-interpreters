@@ -19,11 +19,15 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn new(enclosing: Option<&Environment>) -> Self {
+    pub fn new(enclosing: Option<Environment>) -> Self {
         Self {
-            enclosing: enclosing.map(|e| Box::new(e.clone())),
+            enclosing: enclosing.map(|e| Box::new(e)),
             values: HashMap::new(),
         }
+    }
+
+    pub fn enclosing(&self) -> Option<&Environment> {
+        self.enclosing.as_ref().map(|e| &**e)
     }
 
     pub fn assign(&mut self, token: &Token, value: &Value) -> EResult<()> {

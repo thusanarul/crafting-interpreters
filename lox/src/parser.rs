@@ -47,7 +47,8 @@ impl Parser {
         while !self.is_at_end() {
             match self.declaration() {
                 Ok(stmt) => statements.push(stmt),
-                Err(_) => {
+                Err(err) => {
+                    eprintln!("Parser error: {err}");
                     self.synchronize()?;
                 }
             }
@@ -105,7 +106,7 @@ impl Parser {
             return Ok(Stmt::Block(self.block()?));
         }
 
-        self.express_statement()
+        self.expression_statement()
     }
 
     // grammar: -> "for" "(" ( varDecl | exprStmt | ";" )
@@ -121,7 +122,7 @@ impl Parser {
         } else if self.match_type(&TokenType::Var) {
             initializer = Some(self.var_declaration()?);
         } else {
-            initializer = Some(self.express_statement()?);
+            initializer = Some(self.expression_statement()?);
         }
 
         let mut condition = None;
@@ -132,11 +133,11 @@ impl Parser {
         self.consume(TokenType::Semicolon, "Expect ';' after loop condition.")?;
 
         let mut increment = None;
-        if self.check(&TokenType::RightParen) {
+        if !self.check(&TokenType::RightParen) {
             increment = Some(self.expression()?);
         }
 
-        self.consume(TokenType::Semicolon, "Expect ')' after for clauses.")?;
+        self.consume(TokenType::RightParen, "Expect ')' after for clauses.")?;
 
         let mut body = self.statement()?;
 
@@ -160,7 +161,7 @@ impl Parser {
     fn while_statement(&mut self) -> PResult<Stmt> {
         self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
-        self.consume(TokenType::LeftParen, "Expect ')' after condition.")?;
+        self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
         let body = self.statement()?;
 
         Ok(Stmt::While {
@@ -209,7 +210,7 @@ impl Parser {
     }
 
     // grammar: -> expression ";"
-    fn express_statement(&mut self) -> PResult<Stmt> {
+    fn expression_statement(&mut self) -> PResult<Stmt> {
         let value = self.expression()?;
         self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::Expression(value))
